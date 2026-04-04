@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CIFAR-10 Mixture of Experts</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="container">
+        <header>
+            <h1>Hierarchical <span>MoE</span></h1>
+            <p>Advanced Image Classification with Specialized Neural Routing</p>
+        </header>
+
+        <section class="glass-panel upload-section" id="upload-panel">
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-icon">
+                    <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="2" fill="none"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </div>
+                <h3>Drag & Drop an image here</h3>
+                <p>or click to browse from your computer</p>
+                <input type="file" id="file-input" accept="image/jpeg, image/png, image/webp" hidden>
+            </div>
+            <div id="image-preview-container" class="hidden">
+                <img id="image-preview" src="" alt="Preview">
+                <button id="predict-btn" class="primary-btn">Analyze Image</button>
+                <button id="reset-btn" class="text-btn">Reset</button>
+            </div>
+        </section>
+
+        <div id="loading-overlay" class="hidden">
+            <div class="spinner"></div>
+            <p>Routing through experts...</p>
+        </div>
+
+        <section class="glass-panel results-section hidden" id="results-panel">
+            <h2>Analysis Results</h2>
+            <div class="prediction-card">
+                <span class="label-title">Final Prediction:</span>
+                <span id="pred-label" class="pred-text">Cat</span>
+                <div class="confidence-bar">
+                    <div id="pred-conf-fill" class="fill"></div>
+                </div>
+                <span id="pred-conf-text" class="conf-text">95%</span>
+            </div>
+
+            <div class="routing-visualizer">
+                <h3>Routing Logic Insight</h3>
+
+                <div class="routing-stage">
+                    <h4>Level 1: Domain Gating</h4>
+                    <div class="route-bars">
+                        <div class="route-item">
+                            <span>Natural Route</span>
+                            <div class="bar-container">
+                                <div id="route-nat-bar" class="bar nat-color"></div>
+                            </div>
+                            <span id="route-nat-text">--</span>
+                        </div>
+                        <div class="route-item">
+                            <span>Artificial Route</span>
+                            <div class="bar-container">
+                                <div id="route-art-bar" class="bar art-color"></div>
+                            </div>
+                            <span id="route-art-text">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="routing-stage">
+                    <h4>Level 2: Expert Weighting</h4>
+                    <div class="route-bars">
+                        <div class="route-item">
+                            <span>Base Expert</span>
+                            <div class="bar-container">
+                                <div id="weight-base-bar" class="bar base-color"></div>
+                            </div>
+                            <span id="weight-base-text">--</span>
+                        </div>
+                        <div class="route-item">
+                            <span>Specialized Expert</span>
+                            <div class="bar-container">
+                                <div id="weight-spec-bar" class="bar spec-color"></div>
+                            </div>
+                            <span id="weight-spec-text">--</span>
+                        </div>
+                    </div>
+                    <p id="routing-summary" class="routing-summary-text"></p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
