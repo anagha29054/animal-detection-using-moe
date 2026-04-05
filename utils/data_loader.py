@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.datasets import cifar10
 from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.model_selection import train_test_split
 
 # CIFAR-10 Classes:
@@ -68,3 +69,17 @@ def get_gating_labels(y):
 
 def to_one_hot(y, num_classes=10):
     return to_categorical(y, num_classes=num_classes)
+
+def get_augmented_generator(x, y, batch_size=64):
+    """
+    Returns an augmented data generator for training.
+    Applies random horizontal flips and small random crops (4px padding).
+    Do NOT use this for validation or test data.
+    """
+    datagen = ImageDataGenerator(
+        horizontal_flip=True,
+        width_shift_range=0.125,   # 4px shift on 32px image
+        height_shift_range=0.125,
+        fill_mode='reflect'
+    )
+    return datagen.flow(x, y, batch_size=batch_size)

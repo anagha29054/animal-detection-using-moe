@@ -6,8 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from tensorflow.keras.losses import CategoricalCrossentropy
 from utils.data_loader import load_and_preprocess_cifar10, get_expert_subsets, to_one_hot
 from utils.visualization import plot_training_history
@@ -20,12 +20,17 @@ def create_second_level_gate(input_shape=(32, 32, 3)):
     """
     model = Sequential([
         Conv2D(16, (3, 3), activation='relu', padding='same', input_shape=input_shape),
+        BatchNormalization(),
         MaxPooling2D((2, 2)),
-        
+
         Conv2D(32, (3, 3), activation='relu', padding='same'),
+        BatchNormalization(),
         MaxPooling2D((2, 2)),
-        
-        Flatten(),
+
+        Conv2D(64, (3, 3), activation='relu', padding='same'),
+        BatchNormalization(),
+
+        GlobalAveragePooling2D(),
         Dense(64, activation='relu'),
         Dropout(0.5),
         # Output is 2 neurons with softmax: [Weight_Base, Weight_Spec]
@@ -33,10 +38,10 @@ def create_second_level_gate(input_shape=(32, 32, 3)):
     ])
     return model
 
-def generate_pseudo_labels(images, targets, base_model_path, spec_model_path):
+def generate_pseudo_labels(images, targets, base_model_path, spec_model_path, temperature=2.0):
     """
     Evaluate Base vs Specialized model on each training instance.
-    Create pseudo labels: [1, 0] if base is better, [0, 1] if specialized is better.
+    Create soft pseudo labels based on relative loss.
     """
     print(f"Loading {base_model_path} and {spec_model_path} to generate gating pseudo-labels...")
     base_model = tf.keras.models.load_model(base_model_path)
@@ -54,15 +59,12 @@ def generate_pseudo_labels(images, targets, base_model_path, spec_model_path):
     base_losses = cce(targets_oh, base_preds).numpy()
     spec_losses = cce(targets_oh, spec_preds).numpy()
     
-    # Label is [1, 0] if base is better, [0, 1] if specialized is better
-    gate_labels = []
-    for bl, sl in zip(base_losses, spec_losses):
-        if bl < sl:
-            gate_labels.append([1.0, 0.0]) # Base was better
-        else:
-            gate_labels.append([0.0, 1.0]) # Specialized was better
+    spec_advantage = base_losses - spec_losses  # positive = spec is better
+    # Use sigmoid to convert to soft label for specialized weight
+    w_spec = 1.0 / (1.0 + np.exp(-spec_advantage * temperature))
+    gate_labels = np.stack([1.0 - w_spec, w_spec], axis=1)
             
-    return np.array(gate_labels)
+    return gate_labels
 
 def train_gater(x_train, y_train, x_val, y_val, base_path, spec_path, model_name, epochs):
     # Generating targets
@@ -77,8 +79,9 @@ def train_gater(x_train, y_train, x_val, y_val, base_path, spec_path, model_name
     best_path = os.path.join('saved_models', f'{model_name}_best.keras')
     
     callbacks = [
-        EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-        ModelCheckpoint(best_path, monitor='val_accuracy', save_best_only=True)
+        EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
+        ModelCheckpoint(best_path, monitor='val_accuracy', save_best_only=True),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-6, verbose=1)
     ]
     
     print(f"\\n--- Training {model_name} ---")
@@ -98,14 +101,10 @@ def train_gater(x_train, y_train, x_val, y_val, base_path, spec_path, model_name
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=20)
     args = parser.parse_args()
 
     (x_train, y_train), (x_val, y_val), _ = load_and_preprocess_cifar10()
-    
-    # Subsets
-    (x_art_tr, y_art_tr), (x_nat_tr, y_nat_tr) = get_expert_subsets(x_train, y_train)
-    (x_art_val, y_art_val), (x_nat_val, y_nat_val) = get_expert_subsets(x_val, y_val)
     
     base_m_path = os.path.join('saved_models', 'base_expert_final.keras')
     art_m_path = os.path.join('saved_models', 'artificial_expert_final.keras')
@@ -116,10 +115,10 @@ def main():
         return
         
     print("=== Training Artificial Gater ===")
-    train_gater(x_art_tr, y_art_tr, x_art_val, y_art_val, base_m_path, art_m_path, 'artificial_gater', args.epochs)
+    train_gater(x_train, y_train, x_val, y_val, base_m_path, art_m_path, 'artificial_gater', args.epochs)
     
     print("=== Training Natural Gater ===")
-    train_gater(x_nat_tr, y_nat_tr, x_nat_val, y_nat_val, base_m_path, nat_m_path, 'natural_gater', args.epochs)
+    train_gater(x_train, y_train, x_val, y_val, base_m_path, nat_m_path, 'natural_gater', args.epochs)
 
 if __name__ == '__main__':
     main()

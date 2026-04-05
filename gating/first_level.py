@@ -5,8 +5,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from utils.data_loader import load_and_preprocess_cifar10, get_gating_labels
 from utils.visualization import plot_training_history
 import argparse
@@ -17,21 +17,26 @@ def create_gating_cnn(input_shape=(32, 32, 3)):
     """
     model = Sequential([
         Conv2D(16, (3, 3), activation='relu', padding='same', input_shape=input_shape),
+        BatchNormalization(),
         MaxPooling2D((2, 2)),
-        
+
         Conv2D(32, (3, 3), activation='relu', padding='same'),
+        BatchNormalization(),
         MaxPooling2D((2, 2)),
-        
-        Flatten(),
+
+        Conv2D(64, (3, 3), activation='relu', padding='same'),
+        BatchNormalization(),
+
+        GlobalAveragePooling2D(),
         Dense(64, activation='relu'),
         Dropout(0.5),
-        Dense(1, activation='sigmoid') # 0: Artificial, 1: Natural
+        Dense(1, activation='sigmoid')  # 0: Artificial, 1: Natural
     ])
     return model
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=20)
     args = parser.parse_args()
 
     (x_train, y_train), (x_val, y_val), _ = load_and_preprocess_cifar10()
@@ -46,8 +51,9 @@ def main():
     best_path = os.path.join('saved_models', 'first_level_gate_best.keras')
     
     callbacks = [
-        EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-        ModelCheckpoint(best_path, monitor='val_accuracy', save_best_only=True)
+        EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True),
+        ModelCheckpoint(best_path, monitor='val_accuracy', save_best_only=True),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-6, verbose=1)
     ]
     
     print("\\n--- Training First Level Gating Network (Artificial vs Natural) ---")
